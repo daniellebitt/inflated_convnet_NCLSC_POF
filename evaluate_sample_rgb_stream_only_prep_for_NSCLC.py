@@ -14,9 +14,10 @@
 # ============================================================================
 """Loads a sample video and classifies using a trained Kinetics checkpoint."""
 
-#NB, the default if for this to load the imagenet pre-trained rgb model, although can use the rgb600 model
-#if you select in (see multi_ealuate.sh). Can also use choose not to use chkpt trained from 
-#scratch from Kinetics instead of the chkpt from model pre-trained on imagenet (again, see multi_evaluate.sh)
+#NB, the default if for this to load the imagenet pre-trained rgb model, although can choose not to use chkpt trained from 
+#scratch from Kinetics instead of the chkpt from model pre-trained on imagenet (see multi_evaluate.sh)
+
+#remove rgb600 throughout
 
 from __future__ import absolute_import
 from __future__ import division
@@ -32,12 +33,11 @@ import i3d
 _IMAGE_SIZE = 224
 
 #sets the number of video frames
-_SAMPLE_VIDEO_FRAMES = 79
+_SAMPLE_VIDEO_FRAMES = 78
 
 #just the path to the video RBG and flow np arrays that are being classified
 _SAMPLE_PATHS = {
-    'rgb': 'data/v_CricketShot_g04_c01_rgb.npy',
-    'flow': 'data/v_CricketShot_g04_c01_flow.npy',
+    'rgb': 'data/mock_array.npy'
 }
 
 #paths to the checkpoints (weights) for models trained from scratch, or pre-trained using imagenet first
@@ -45,13 +45,13 @@ _SAMPLE_PATHS = {
 #I think I will want to use rbg_imagenet
 _CHECKPOINT_PATHS = {
     'rgb': 'data/checkpoints/rgb_scratch/model.ckpt',
-    'rgb600': 'data/checkpoints/rgb_scratch_kin600/model.ckpt',
+    #'rgb600': 'data/checkpoints/rgb_scratch_kin600/model.ckpt',
     'rgb_imagenet': 'data/checkpoints/rgb_imagenet/model.ckpt'
 }
 
 #path to the labels
 _LABEL_MAP_PATH = 'data/label_map.txt'
-_LABEL_MAP_PATH_600 = 'data/label_map_600.txt'
+#_LABEL_MAP_PATH_600 = 'data/label_map_600.txt'
 
 FLAGS = tf.flags.FLAGS
 
@@ -70,19 +70,19 @@ def main(unused_argv):
   imagenet_pretrained = FLAGS.imagenet_pretrained
 
   NUM_CLASSES = 400
-  if eval_type == 'rgb600':
-    NUM_CLASSES = 600
+  #if eval_type == 'rgb600':
+    #NUM_CLASSES = 600
 
-  if eval_type not in ['rgb', 'rgb600']:
-    raise ValueError('Bad `eval_type`, must be one of rgb, rgb600')
+  if eval_type not in ['rgb']:
+    raise ValueError('Bad `eval_type`, must be rgb')
 
   #this prepares the labels from the appropriate path to the label file
-  if eval_type == 'rgb600':
-    kinetics_classes = [x.strip() for x in open(_LABEL_MAP_PATH_600)]
-  else:
-    kinetics_classes = [x.strip() for x in open(_LABEL_MAP_PATH)]
+  #if eval_type == 'rgb600':
+    #kinetics_classes = [x.strip() for x in open(_LABEL_MAP_PATH_600)]
+  #else:
+  kinetics_classes = [x.strip() for x in open(_LABEL_MAP_PATH)]
 
-  if eval_type in ['rgb', 'rgb600']:
+  if eval_type in ['rgb']:
     #creates the placeholder input
     # RGB input has 3 channels.
     rgb_input = tf.placeholder(
@@ -94,18 +94,24 @@ def main(unused_argv):
       #defines the model
       rgb_model = i3d.InceptionI3d(
           NUM_CLASSES, spatial_squeeze=True, final_endpoint='Logits')
+
+      # above ~ model = myModel()
+
+
       #runs the model with logits as endpoint
       rgb_logits, _ = rgb_model(
           rgb_input, is_training=False, dropout_keep_prob=1.0)
+
+      # above ~ predictions = model(images)
 
     rgb_variable_map = {}
     for variable in tf.global_variables():
 
       if variable.name.split('/')[0] == 'RGB':
-        if eval_type == 'rgb600':
-          rgb_variable_map[variable.name.replace(':0', '')[len('RGB/inception_i3d/'):]] = variable
-        else:
-          rgb_variable_map[variable.name.replace(':0', '')] = variable
+        #if eval_type == 'rgb600':
+          #rgb_variable_map[variable.name.replace(':0', '')[len('RGB/inception_i3d/'):]] = variable
+        #else:
+        rgb_variable_map[variable.name.replace(':0', '')] = variable
 
     rgb_saver = tf.train.Saver(var_list=rgb_variable_map, reshape=True)
 
@@ -140,6 +146,7 @@ def main(unused_argv):
     #model_logits = rgb_logits + flow_logits
 
   #this makes the prediction
+  #can probably remove this if not using joint
   model_predictions = tf.nn.softmax(model_logits)
 
 
@@ -150,7 +157,7 @@ def main(unused_argv):
 
     #restores appropriate checkpoint for eval_types that include rbg
     #creates dictionary to feed as input into the model for prediction
-    if eval_type in ['rgb', 'rgb600']:
+    if eval_type in ['rgb']:
       #restore appropriate checkpoint
       if imagenet_pretrained:
         rgb_saver.restore(sess, _CHECKPOINT_PATHS['rgb_imagenet'])
